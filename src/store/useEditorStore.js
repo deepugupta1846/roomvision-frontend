@@ -18,7 +18,7 @@ const defaultRoom = {
   wallColor: "#ece7df",
   floorTexture: "none",
   wallTexture: "none",
-  environmentEnabled: true,
+  environmentEnabled: false,
   environment: "apartment",
   envIntensity: 1,
   showEnvBackground: true,
@@ -43,6 +43,7 @@ export const useEditorStore = create((set, get) => ({
   isPathPlaying: false,
   isMediaExporting: false,
   mediaExportProgress: 0,
+  sceneEpoch: 0,
   _pathCancel: null,
 
   setProjectName: (name) => set({ projectName: name || "Untitled Room" }),
@@ -50,7 +51,7 @@ export const useEditorStore = create((set, get) => ({
   setRemoteRoomId: (remoteRoomId) => set({ remoteRoomId }),
 
   resetEditor: () =>
-    set({
+    set((state) => ({
       room: { ...defaultRoom },
       objects: [],
       projectName: "Untitled Room",
@@ -60,7 +61,8 @@ export const useEditorStore = create((set, get) => ({
       pathDurationSec: 6,
       isPreviewMode: false,
       transformMode: "translate",
-    }),
+      sceneEpoch: state.sceneEpoch + 1,
+    })),
 
   setShareStatus: (shareStatus) => set({ shareStatus }),
 
@@ -122,7 +124,7 @@ export const useEditorStore = create((set, get) => ({
     }
     nextId = Math.max(nextId, maxN + 1);
 
-    set({
+    set((state) => ({
       projectName: doc.name || "Untitled Room",
       room: { ...defaultRoom, ...doc.room },
       objects: doc.objects.map((obj) => ({
@@ -147,7 +149,8 @@ export const useEditorStore = create((set, get) => ({
       pathDurationSec: doc.pathDurationSec || 6,
       selectedId: null,
       isPreviewMode: false,
-    });
+      sceneEpoch: state.sceneEpoch + 1,
+    }));
   },
 
   setRoom: (partial) =>

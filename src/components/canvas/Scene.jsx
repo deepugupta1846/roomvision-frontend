@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import {
   OrbitControls,
@@ -7,11 +7,13 @@ import {
   GizmoHelper,
   GizmoViewport,
   ContactShadows,
+  useProgress,
 } from "@react-three/drei";
 
 import Room from "./Room";
 import Light from "./Light";
 import PlacedObject from "./PlacedObject";
+import SceneLoadingOverlay from "./SceneLoadingOverlay";
 import { useEditorStore } from "../../store/useEditorStore";
 import { registerCameraApi } from "../../utils/cameraBridge";
 
@@ -30,7 +32,6 @@ function CameraBridge({ controlsRef }) {
         if (controlsRef.current) controlsRef.current.enabled = enabled;
       },
       capturePng() {
-        // Force a render into the drawing buffer, then read pixels
         const prev = gl.getRenderTarget();
         gl.setRenderTarget(null);
         gl.render(scene, camera);
@@ -60,7 +61,7 @@ function ControlsGuard({ controlsRef }) {
 
 function SceneEnvironment() {
   const environmentEnabled = useEditorStore(
-    (s) => s.room.environmentEnabled !== false
+    (s) => s.room.environmentEnabled === true
   );
   const environment = useEditorStore((s) => s.room.environment || "apartment");
   const showEnvBackground = useEditorStore(
@@ -90,7 +91,33 @@ function SceneEnvironment() {
   );
 }
 
-function SceneContent() {
+/** Signals first successful frame so we can hide the bootstrap loader */
+function FirstFrameReady({ onReady }) {
+  const { gl } = useThree();
+  const fired = useRef(false);
+
+  useEffect(() => {
+    if (fired.current) return undefined;
+    let frames = 0;
+    let raf = 0;
+    const tick = () => {
+      frames += 1;
+      // Wait a couple of rendered frames so the room is visible
+      if (frames >= 2) {
+        fired.current = true;
+        onReady?.();
+        return;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [gl, onReady]);
+
+  return null;
+}
+
+function SceneContent({ onFirstFrame }) {
   const controlsRef = useRef(null);
   const objects = useEditorStore((s) => s.objects);
   const clearSelection = useEditorStore((s) => s.clearSelection);
@@ -101,6 +128,7 @@ function SceneContent() {
 
   return (
     <>
+      <FirstFrameReady onReady={onFirstFrame} />
       <CameraBridge controlsRef={controlsRef} />
       <ControlsGuard controlsRef={controlsRef} />
       <Light />
@@ -152,20 +180,60 @@ function SceneContent() {
   );
 }
 
-export default function Scene() {
+export default function Scene({
+  projectLoading = false,
+  loadLabel = "Loading scene…",
+}) {
+  const [firstFrameReady, setFirstFrameReady] = useState(false);
+  const { active, progress } = useProgress();
+  const sceneEpoch = useEditorStore((s) => s.sceneEpoch);
+
+  // Reset first-frame gate when a new project is loaded into the editor
+  useEffect(() => {
+    setFirstFrameReady(false);
+  }, [sceneEpoch]);
+
+  const bootstrapping = !firstFrameReady;
+  const forceVisible = projectLoading || bootstrapping || active;
+
+  let label = loadLabel;
+  if (projectLoading) label = "Loading room…";
+  else if (active) label = "Loading environment…";
+  else if (bootstrapping) label = "Preparing 3D scene…";
+
+  const minProgress = projectLoading
+    ? 12
+    : bootstrapping && !active
+      ? 55
+      : 0;
+
+  const displayProgress = projectLoading
+    ? Math.max(minProgress, progress * 0.4)
+    : Math.max(minProgress, progress);
+
   return (
-    <Canvas
-      shadows
-      gl={{ preserveDrawingBuffer: true, toneMappingExposure: 1.05 }}
-      camera={{ position: [7, 5, 8], fov: 45 }}
-      onPointerMissed={() => {
-        const state = useEditorStore.getState();
-        if (!state.isPreviewMode && !state.isMediaExporting) {
-          state.clearSelection();
-        }
-      }}
-    >
-      <SceneContent />
-    </Canvas>
+    <div className="scene-root">
+      <Canvas
+        shadows
+        gl={{ preserveDrawingBuffer: true, toneMappingExposure: 1.05 }}
+        camera={{ position: [7, 5, 8], fov: 45 }}
+        onPointerMissed={() => {
+          const state = useEditorStore.getState();
+          if (!state.isPreviewMode && !state.isMediaExporting) {
+            state.clearSelection();
+          }
+        }}
+      >
+        <Suspense fallback={null}>
+          <SceneContent onFirstFrame={() => setFirstFrameReady(true)} />
+        </Suspense>
+      </Canvas>
+
+      <SceneLoadingOverlay
+        forceVisible={forceVisible}
+        label={label}
+        progress={displayProgress}
+      />
+    </div>
   );
 }

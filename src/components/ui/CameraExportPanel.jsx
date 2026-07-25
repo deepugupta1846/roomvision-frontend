@@ -134,7 +134,7 @@ export default function CameraExportPanel() {
         durationMs: pathDurationSec * 1000,
         projectName,
         format,
-        fps: format === "mp4" ? 24 : 30,
+        fps: 30,
         onProgress: (t) => setMediaExportProgress(t),
         onStatus: (label) => setBusyLabel(label),
       });
@@ -239,19 +239,19 @@ export default function CameraExportPanel() {
           <button type="button" disabled={busy} onClick={handleExportPathImages}>
             Export path images
           </button>
-          {/* <button
+          <button
             type="button"
             className="primary-export"
             disabled={busy}
             onClick={() => handleExportVideo("mp4")}
           >
             Export video (MP4)
-          </button> */}
+          </button>
           <button
             type="button"
-            className="primary-export"
             disabled={busy}
             onClick={() => handleExportVideo("webm")}
+            title="VP8/VP9 — may not open in Windows Movies & TV; use VLC or MP4 instead"
           >
             Export video (WebM)
           </button>

@@ -15,7 +15,10 @@ import {
   readSharePayloadFromLocation,
 } from "../../utils/roomShare";
 
-export default function EditorLayout() {
+export default function EditorLayout({
+  projectLoading = false,
+  loadLabel = "Loading scene…",
+}) {
   useEditorHotkeys();
 
   const objectCount = useEditorStore((s) => s.objects.length);
@@ -107,13 +110,13 @@ export default function EditorLayout() {
         )}
 
         <div className="viewport-canvas">
-          <Scene />
+          <Scene projectLoading={projectLoading} loadLabel={loadLabel} />
           {isPreviewMode && (
             <div className="preview-overlay">
               <span className="preview-badge">Preview</span>
               <div className="preview-actions">
                 <SaveRoomButton />
-                <ShareExportMenu />
+                {/* <ShareExportMenu /> */}
                 <button
                   type="button"
                   className="preview-exit-btn"

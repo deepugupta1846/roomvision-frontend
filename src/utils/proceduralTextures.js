@@ -207,28 +207,25 @@ function paintCanvas(def) {
 }
 
 /**
- * Returns a cloned, configured CanvasTexture for a room texture id.
- * Caller owns the clone and should dispose when done.
+ * Returns a CanvasTexture for a room texture id.
+ * Canvas pixels are cached; each call gets a fresh texture (avoid clone() —
+ * clones often skip GPU upload until another scene update).
+ * Caller owns the texture and should dispose when done.
  */
 export function createRoomTextureMap(textureId) {
   const def = getRoomTexture(textureId);
   if (!def || def.kind === "none") return null;
 
-  let source = cache.get(def.id);
-  if (!source) {
-    const canvas = paintCanvas(def);
-    source = new THREE.CanvasTexture(canvas);
-    source.colorSpace = THREE.SRGBColorSpace;
-    source.wrapS = THREE.RepeatWrapping;
-    source.wrapT = THREE.RepeatWrapping;
-    source.needsUpdate = true;
-    cache.set(def.id, source);
+  let canvas = cache.get(def.id);
+  if (!canvas) {
+    canvas = paintCanvas(def);
+    cache.set(def.id, canvas);
   }
 
-  const map = source.clone();
+  const map = new THREE.CanvasTexture(canvas);
+  map.colorSpace = THREE.SRGBColorSpace;
   map.wrapS = THREE.RepeatWrapping;
   map.wrapT = THREE.RepeatWrapping;
-  map.colorSpace = THREE.SRGBColorSpace;
   const [rx, ry] = def.repeat || [1, 1];
   map.repeat.set(rx, ry);
   map.needsUpdate = true;

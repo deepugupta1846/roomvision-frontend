@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import EditorLayout from "../components/ui/EditorLayout";
+import RoomNameField from "../components/ui/RoomNameField";
 import { roomApi } from "../api/client";
 import { useEditorStore } from "../store/useEditorStore";
 
@@ -13,14 +14,14 @@ export default function EditorPage() {
   const exitPreview = useEditorStore((s) => s.exitPreview);
   const setShareStatus = useEditorStore((s) => s.setShareStatus);
 
-  const [loading, setLoading] = useState(true);
+  const [projectLoading, setProjectLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
-      setLoading(true);
+      setProjectLoading(true);
       setError("");
       try {
         const { data } = await roomApi.get(roomId);
@@ -45,7 +46,7 @@ export default function EditorPage() {
         if (cancelled) return;
         setError(err.response?.data?.message || "Failed to load room");
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setProjectLoading(false);
       }
     })();
 
@@ -62,14 +63,6 @@ export default function EditorPage() {
     setShareStatus,
     exitPreview,
   ]);
-
-  if (loading) {
-    return (
-      <div className="editor-loading">
-        <p>Loading room…</p>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -89,12 +82,23 @@ export default function EditorPage() {
   return (
     <div className="editor-page-shell">
       <div className="editor-top-bar">
-        <Link to="/dashboard" className="back-dashboard">
-          ← Dashboard
-        </Link>
-        <span className="editor-mode-label">Edit mode</span>
+        <div className="editor-top-bar-left">
+          <Link to="/dashboard" className="back-dashboard">
+            ← Dashboard
+          </Link>
+          <span className="editor-top-bar-sep" aria-hidden>
+            /
+          </span>
+          <RoomNameField />
+        </div>
+        <span className="editor-mode-label">
+          {projectLoading ? "Loading…" : "Edit mode"}
+        </span>
       </div>
-      <EditorLayout />
+      <EditorLayout
+        projectLoading={projectLoading}
+        loadLabel="Loading room…"
+      />
     </div>
   );
 }

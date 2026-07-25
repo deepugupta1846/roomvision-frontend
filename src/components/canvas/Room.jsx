@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo } from "react";
 import { useEditorStore } from "../../store/useEditorStore";
 import { createRoomTextureMap } from "../../utils/proceduralTextures";
 import { getRoomTexture } from "../../data/roomTextures";
@@ -7,18 +7,44 @@ import { getSurfacePbr } from "../../data/environments";
 function useSurfaceMap(textureId, worldU, worldV) {
   const map = useMemo(() => createRoomTextureMap(textureId), [textureId]);
 
-  useEffect(() => {
-    if (!map) return undefined;
+  // Apply UV repeat before paint so the first frame shows the texture
+  useLayoutEffect(() => {
+    if (!map) return;
     const def = getRoomTexture(textureId);
     const [rx, ry] = def.repeat || [1, 1];
-    map.repeat.set(Math.max(1, worldU * (rx / 4)), Math.max(1, worldV * (ry / 4)));
+    map.repeat.set(
+      Math.max(1, worldU * (rx / 4)),
+      Math.max(1, worldV * (ry / 4))
+    );
     map.needsUpdate = true;
-    return () => {
-      map.dispose();
-    };
   }, [map, textureId, worldU, worldV]);
 
+  // Dispose only when the texture instance changes / unmounts
+  useEffect(() => {
+    return () => {
+      map?.dispose();
+    };
+  }, [map]);
+
   return map;
+}
+
+function SurfaceMaterial({ map, color, roughness, metalness, envMapIntensity, ...rest }) {
+  return (
+    <meshStandardMaterial
+      color={map ? "#ffffff" : color}
+      map={map ?? null}
+      roughness={roughness}
+      metalness={metalness}
+      envMapIntensity={envMapIntensity}
+      // Remount when map identity changes so Three always uploads the new map
+      key={map?.uuid ?? `solid-${color}`}
+      onUpdate={(mat) => {
+        mat.needsUpdate = true;
+      }}
+      {...rest}
+    />
+  );
 }
 
 /**
@@ -40,7 +66,7 @@ export default function Room() {
     wallColor,
     floorTexture = "none",
     wallTexture = "none",
-    environmentEnabled = true,
+    environmentEnabled = false,
     envIntensity = 1,
   } = room;
 
@@ -58,16 +84,16 @@ export default function Room() {
     ? Math.max(0.1, Number(envIntensity) || 1)
     : 0;
 
-  const floorMat = {
-    color: floorMap ? "#ffffff" : floorColor,
-    map: floorMap || undefined,
+  const floorProps = {
+    map: floorMap,
+    color: floorColor,
     roughness: floorPbr.roughness,
     metalness: floorPbr.metalness,
     envMapIntensity: floorPbr.envMapIntensity * envScale,
   };
 
-  const wallMatBase = {
-    color: wallMapLong || wallMapShort ? "#ffffff" : wallColor,
+  const wallProps = {
+    color: wallColor,
     roughness: wallPbr.roughness,
     metalness: wallPbr.metalness,
     envMapIntensity: wallPbr.envMapIntensity * envScale,
@@ -77,7 +103,7 @@ export default function Room() {
     <group>
       <mesh position={[0, floorThickness / 2, 0]} receiveShadow castShadow>
         <boxGeometry args={[width, floorThickness, depth]} />
-        <meshStandardMaterial {...floorMat} />
+        <SurfaceMaterial {...floorProps} />
       </mesh>
 
       <mesh
@@ -86,7 +112,7 @@ export default function Room() {
         receiveShadow
       >
         <boxGeometry args={[width + wallThickness * 2, height, wallThickness]} />
-        <meshStandardMaterial {...wallMatBase} map={wallMapLong || undefined} />
+        <SurfaceMaterial {...wallProps} map={wallMapLong} />
       </mesh>
 
       <mesh
@@ -95,9 +121,9 @@ export default function Room() {
         receiveShadow
       >
         <boxGeometry args={[width + wallThickness * 2, height, wallThickness]} />
-        <meshStandardMaterial
-          {...wallMatBase}
-          map={wallMapLong || undefined}
+        <SurfaceMaterial
+          {...wallProps}
+          map={wallMapLong}
           transparent={!solidFront}
           opacity={solidFront ? 1 : 0.35}
         />
@@ -109,7 +135,7 @@ export default function Room() {
         receiveShadow
       >
         <boxGeometry args={[wallThickness, height, depth]} />
-        <meshStandardMaterial {...wallMatBase} map={wallMapShort || undefined} />
+        <SurfaceMaterial {...wallProps} map={wallMapShort} />
       </mesh>
 
       <mesh
@@ -118,7 +144,7 @@ export default function Room() {
         receiveShadow
       >
         <boxGeometry args={[wallThickness, height, depth]} />
-        <meshStandardMaterial {...wallMatBase} map={wallMapShort || undefined} />
+        <SurfaceMaterial {...wallProps} map={wallMapShort} />
       </mesh>
     </group>
   );
