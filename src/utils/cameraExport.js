@@ -186,9 +186,27 @@ function evenSize(n) {
   return v % 2 === 0 ? v : v - 1;
 }
 
+/** Target encode size: keep source pixels up to 1080p HD */
+function resolveExportSize(srcW, srcH, maxW = 1920, maxH = 1080) {
+  let width = Math.max(2, srcW || 1280);
+  let height = Math.max(2, srcH || 720);
+  const scale = Math.min(1, maxW / width, maxH / height);
+  width = evenSize(width * scale);
+  height = evenSize(height * scale);
+  return { width, height };
+}
+
+/** Bitrate for near-original HD look (~0.12–0.15 bpp) */
+function hdBitrate(width, height, fps) {
+  const pixels = width * height;
+  const bpp = pixels >= 1920 * 1000 ? 0.14 : 0.16;
+  const rate = Math.round(pixels * fps * bpp);
+  return Math.min(14_000_000, Math.max(5_000_000, rate));
+}
+
 /**
- * Fast MP4 via WebCodecs (hardware encode when available) + mp4-muxer.
- * Much faster than ffmpeg.wasm re-encode.
+ * Fast MP4 via WebCodecs + mp4-muxer.
+ * Exports up to 1080p HD with High/Main H.264 for quality; falls back to Baseline.
  */
 async function exportMp4WebCodecs({
   keyframes,
@@ -206,22 +224,44 @@ async function exportMp4WebCodecs({
   const { gl, scene, camera, setControlsEnabled } = getCameraApi();
   const canvas = gl.domElement;
 
-  // Cap resolution for speed / smaller files
-  const maxW = 1280;
-  let width = canvas.width || 1280;
-  let height = canvas.height || 720;
-  if (width > maxW) {
-    height = (height * maxW) / width;
-    width = maxW;
-  }
-  width = evenSize(width);
-  height = evenSize(height);
+  // Temporarily render at HD pixel density so export isn't limited by a small viewport
+  const prevDpr = gl.getPixelRatio();
+  const cssW = Math.max(1, canvas.clientWidth || canvas.width);
+  const cssH = Math.max(1, canvas.clientHeight || canvas.height);
+  const exportDpr = Math.min(
+    2,
+    Math.max(prevDpr, 1920 / cssW, 1080 / cssH)
+  );
+
+  const restoreGl = () => {
+    gl.setPixelRatio(prevDpr);
+    gl.setSize(cssW, cssH, false);
+  };
+
+  gl.setPixelRatio(exportDpr);
+  gl.setSize(cssW, cssH, false);
+
+  const { width, height } = resolveExportSize(
+    canvas.width || 1920,
+    canvas.height || 1080,
+    1920,
+    1080
+  );
+  const bitrate = hdBitrate(width, height, fps);
 
   const drawCanvas = document.createElement("canvas");
   drawCanvas.width = width;
   drawCanvas.height = height;
-  const ctx = drawCanvas.getContext("2d", { alpha: false });
-  if (!ctx) throw new Error("Could not create encode canvas");
+  const ctx = drawCanvas.getContext("2d", {
+    alpha: false,
+    colorSpace: "srgb",
+  });
+  if (!ctx) {
+    restoreGl();
+    throw new Error("Could not create encode canvas");
+  }
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
 
   const target = new ArrayBufferTarget();
   const muxer = new Muxer({
@@ -234,54 +274,71 @@ async function exportMp4WebCodecs({
     fastStart: "in-memory",
   });
 
+  let encodeError = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: (e) => console.error("VideoEncoder error:", e),
+    error: (e) => {
+      encodeError = e;
+      console.error("VideoEncoder error:", e);
+    },
   });
 
+  // High/Main Level 4.0 for 1080p quality; Baseline last for player compatibility
   const codecCandidates = [
-    "avc1.42001f", // Baseline
-    "avc1.4d001f", // Main
-    "avc1.64001f", // High
+    "avc1.640028", // High  Level 4.0
+    "avc1.4d0028", // Main  Level 4.0
+    "avc1.64001F", // High  Level 3.1
+    "avc1.4d001F", // Main  Level 3.1
+    "avc1.42001F", // Baseline Level 3.1
   ];
+  const accelModes = ["prefer-hardware", "no-preference", "prefer-software"];
 
   let configured = false;
-  for (const codec of codecCandidates) {
-    const config = {
-      codec,
-      width,
-      height,
-      bitrate: 3_500_000,
-      framerate: fps,
-      latencyMode: "realtime",
-      hardwareAcceleration: "prefer-hardware",
-      avc: { format: "avc" },
-    };
-    try {
-      const check = await VideoEncoder.isConfigSupported(config);
-      if (check.supported) {
-        encoder.configure(config);
-        configured = true;
-        break;
+  outer: for (const hardwareAcceleration of accelModes) {
+    for (const codec of codecCandidates) {
+      const config = {
+        codec,
+        width,
+        height,
+        bitrate,
+        bitrateMode: "variable",
+        framerate: fps,
+        latencyMode: "quality",
+        hardwareAcceleration,
+        avc: { format: "avc" },
+      };
+      try {
+        const check = await VideoEncoder.isConfigSupported(config);
+        if (check.supported) {
+          encoder.configure(check.config || config);
+          configured = true;
+          break outer;
+        }
+      } catch {
+        // try next
       }
-    } catch {
-      // try next
     }
   }
 
   if (!configured) {
     encoder.close();
+    restoreGl();
     throw new Error("H.264 encoding is not supported in this browser");
   }
 
   const totalFrames = Math.max(2, Math.round((durationMs / 1000) * fps));
   const frameDuration = Math.round(1_000_000 / fps);
+  const gop = Math.max(1, Math.round(fps * 2)); // keyframe every ~2s
 
   setControlsEnabled?.(false);
-  onStatus?.("Encoding MP4…");
+  onStatus?.(
+    `Encoding HD MP4 (${width}×${height} @ ${fps}fps)…`
+  );
 
   try {
     for (let i = 0; i < totalFrames; i++) {
+      if (encodeError) throw encodeError;
+
       const t = i / (totalFrames - 1);
       applyCameraSample(samplePath(keyframes, t));
       gl.render(scene, camera);
@@ -296,18 +353,16 @@ async function exportMp4WebCodecs({
         duration: frameDuration,
       });
 
-      // Keep encode queue small so we don't stall
       while (encoder.encodeQueueSize > 6) {
         await new Promise((r) => setTimeout(r, 4));
       }
 
-      encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 || i === 0 });
+      encoder.encode(frame, { keyFrame: i % gop === 0 });
       frame.close();
 
       onProgress?.(i / (totalFrames - 1));
 
-      // Yield occasionally so UI stays responsive
-      if (i % 3 === 0) {
+      if (i % 2 === 0) {
         await new Promise((r) => requestAnimationFrame(() => r()));
       }
     }
@@ -319,6 +374,7 @@ async function exportMp4WebCodecs({
     } catch {
       // already closed
     }
+    restoreGl();
     setControlsEnabled?.(true);
   }
 
@@ -361,7 +417,7 @@ async function exportWebmMediaRecorder({
   const chunks = [];
   const recorder = new MediaRecorder(stream, {
     mimeType,
-    videoBitsPerSecond: 5_000_000,
+    videoBitsPerSecond: 12_000_000,
   });
 
   recorder.ondataavailable = (e) => {

@@ -2,7 +2,7 @@ import { useEditorStore } from "../../store/useEditorStore";
 
 export default function Lights() {
   const environmentEnabled = useEditorStore(
-    (s) => s.room.environmentEnabled !== false
+    (s) => s.room.environmentEnabled === true
   );
 
   // Stronger lights when environment is off so the room stays readable

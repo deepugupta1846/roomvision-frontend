@@ -68,7 +68,7 @@ function TexturePicker({ label, surface, value, onChange, color, onColorChange }
 }
 
 function EnvironmentSection({ room, setRoom }) {
-  const enabled = room.environmentEnabled !== false;
+  const enabled = room.environmentEnabled === true;
 
   return (
     <div className="env-section">
