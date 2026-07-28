@@ -22,7 +22,18 @@ const defaultRoom = {
   environment: "apartment",
   envIntensity: 1,
   showEnvBackground: true,
+  /** Closed floor plan in feet (Visualez draw step) */
+  floorPlan: null,
+  /** World-space footprint [{x,z}] meters, centered */
+  footprint: null,
+  /** Floor material from Pattern/Tiles/Grout wizard */
+  floorMaterial: null,
+  wallMaterial: null,
+  /** When true, editor opens in Visualez draw step */
+  needsFloorPlan: false,
 };
+
+/** @typedef {'draw' | 'edit'} EditorPhase */
 
 /** @typedef {'translate' | 'rotate' | 'scale'} TransformMode */
 
@@ -32,11 +43,13 @@ export const useEditorStore = create((set, get) => ({
   projectName: "Untitled Room",
   remoteRoomId: null,
   selectedId: null,
-  activeCategory: "furniture",
+  activeCategory: "all",
   /** @type {TransformMode} */
   transformMode: "translate",
   transformSpace: "world",
   isPreviewMode: false,
+  /** Default: inside the room so floor + walls are the main view */
+  isInsideRoom: true,
   shareStatus: null,
   cameraPath: [],
   pathDurationSec: 6,
@@ -45,10 +58,60 @@ export const useEditorStore = create((set, get) => ({
   mediaExportProgress: 0,
   sceneEpoch: 0,
   _pathCancel: null,
+  /** @type {EditorPhase} */
+  editorPhase: "edit",
+  materialModal: null, // { surface: 'floor'|'wall'|'object', objectId?, open: true }
 
   setProjectName: (name) => set({ projectName: name || "Untitled Room" }),
 
   setRemoteRoomId: (remoteRoomId) => set({ remoteRoomId }),
+
+  setEditorPhase: (editorPhase) => set({ editorPhase }),
+
+  openMaterialModal: (surface = "floor", objectId = null) =>
+    set({ materialModal: { surface, objectId, open: true } }),
+
+  closeMaterialModal: () => set({ materialModal: null }),
+
+  applySurfaceMaterial: (surface, material) => {
+    if (surface === "object") {
+      const objectId = get().materialModal?.objectId;
+      if (!objectId) {
+        set({ materialModal: null });
+        return;
+      }
+      set((state) => ({
+        objects: state.objects.map((obj) =>
+          obj.id === objectId
+            ? {
+                ...obj,
+                texture: "material",
+                material: { ...material },
+                color: material.tileColor || obj.color,
+              }
+            : obj
+        ),
+        materialModal: null,
+      }));
+      return;
+    }
+
+    set((state) => {
+      const key = surface === "wall" ? "wallMaterial" : "floorMaterial";
+      const colorKey = surface === "wall" ? "wallColor" : "floorColor";
+      const texKey = surface === "wall" ? "wallTexture" : "floorTexture";
+      return {
+        room: {
+          ...state.room,
+          [key]: material,
+          [colorKey]: material.tileColor || state.room[colorKey],
+          // Prefer procedural material map over catalog texture
+          [texKey]: "material",
+        },
+        materialModal: null,
+      };
+    });
+  },
 
   resetEditor: () =>
     set((state) => ({
@@ -60,7 +123,10 @@ export const useEditorStore = create((set, get) => ({
       cameraPath: [],
       pathDurationSec: 6,
       isPreviewMode: false,
+      isInsideRoom: true,
       transformMode: "translate",
+      editorPhase: "edit",
+      materialModal: null,
       sceneEpoch: state.sceneEpoch + 1,
     })),
 
@@ -124,9 +190,12 @@ export const useEditorStore = create((set, get) => ({
     }
     nextId = Math.max(nextId, maxN + 1);
 
+    const mergedRoom = { ...defaultRoom, ...doc.room };
+    const hasPlan = mergedRoom.floorPlan?.closed === true;
+
     set((state) => ({
       projectName: doc.name || "Untitled Room",
-      room: { ...defaultRoom, ...doc.room },
+      room: mergedRoom,
       objects: doc.objects.map((obj) => ({
         id: obj.id || createId(obj.catalogId || "obj"),
         catalogId: obj.catalogId,
@@ -134,6 +203,8 @@ export const useEditorStore = create((set, get) => ({
         category: obj.category || "furniture",
         type: obj.type || "primitive",
         color: obj.color || "#888888",
+        texture: obj.texture || "none",
+        material: obj.material || null,
         position: { x: 0, y: 0, z: 0, ...obj.position },
         rotation: { x: 0, y: 0, z: 0, ...obj.rotation },
         scale: { x: 1, y: 1, z: 1, ...obj.scale },
@@ -147,8 +218,13 @@ export const useEditorStore = create((set, get) => ({
           }))
         : [],
       pathDurationSec: doc.pathDurationSec || 6,
+      // New rooms (needsFloorPlan) open in Visualez draw flow
+      editorPhase:
+        mergedRoom.needsFloorPlan === true && !hasPlan ? "draw" : "edit",
+      materialModal: null,
       selectedId: null,
       isPreviewMode: false,
+      isInsideRoom: true,
       sceneEpoch: state.sceneEpoch + 1,
     }));
   },
@@ -183,6 +259,19 @@ export const useEditorStore = create((set, get) => ({
     }
   },
 
+  enterRoom: () => set({ isInsideRoom: true, isPreviewMode: false }),
+
+  exitRoom: () => set({ isInsideRoom: false }),
+
+  toggleInsideRoom: () => {
+    const { isInsideRoom } = get();
+    if (isInsideRoom) {
+      set({ isInsideRoom: false });
+    } else {
+      set({ isInsideRoom: true, isPreviewMode: false });
+    }
+  },
+
   selectObject: (id) => {
     if (get().isPreviewMode) return;
     set({ selectedId: id });
@@ -214,6 +303,8 @@ export const useEditorStore = create((set, get) => ({
       category: def.category,
       type: def.type,
       color: def.defaultColor,
+      texture: "none",
+      material: null,
       position: {
         x: overrides.position?.x ?? 0,
         y: overrides.position?.y ?? room.floorThickness,
@@ -274,6 +365,8 @@ export const useEditorStore = create((set, get) => ({
 
     return get().addObject(source.catalogId, {
       color: source.color,
+      texture: source.texture || "none",
+      material: source.material ? { ...source.material } : null,
       position: {
         x: source.position.x + 0.4,
         y: source.position.y,

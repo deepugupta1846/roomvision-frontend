@@ -14,6 +14,8 @@ export function createProjectDocument({ room, objects, name = "Untitled Room" })
       category: obj.category,
       type: obj.type,
       color: obj.color,
+      texture: obj.texture || "none",
+      material: obj.material || null,
       position: { ...obj.position },
       rotation: { ...obj.rotation },
       scale: { ...obj.scale },

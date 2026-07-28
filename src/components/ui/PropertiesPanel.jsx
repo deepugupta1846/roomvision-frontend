@@ -1,4 +1,6 @@
 import { useEditorStore } from "../../store/useEditorStore";
+import { isMetalTexture } from "../../data/environments";
+import TexturePicker from "./TexturePicker";
 
 export default function PropertiesPanel() {
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -6,6 +8,11 @@ export default function PropertiesPanel() {
   const updateObject = useEditorStore((s) => s.updateObject);
   const removeObject = useEditorStore((s) => s.removeObject);
   const duplicateObject = useEditorStore((s) => s.duplicateObject);
+  const openMaterialModal = useEditorStore((s) => s.openMaterialModal);
+  const setRoom = useEditorStore((s) => s.setRoom);
+  const environmentEnabled = useEditorStore(
+    (s) => s.room.environmentEnabled === true
+  );
 
   const selected = objects.find((o) => o.id === selectedId);
 
@@ -26,6 +33,14 @@ export default function PropertiesPanel() {
     });
   };
 
+  const applyTexture = (texture) => {
+    updateObject(selected.id, { texture, material: null });
+    // Metals need HDRI reflections to read as metal
+    if (isMetalTexture(texture) && !environmentEnabled) {
+      setRoom({ environmentEnabled: true, showEnvBackground: false });
+    }
+  };
+
   return (
     <section className="panel">
       <header className="panel-header">
@@ -34,14 +49,30 @@ export default function PropertiesPanel() {
       </header>
 
       <div className="field-list">
-        <label className="field field-inline">
-          <span>Color</span>
-          <input
-            type="color"
-            value={selected.color}
-            onChange={(e) => updateObject(selected.id, { color: e.target.value })}
+        <div className="object-texture-section">
+          <TexturePicker
+            label="Texture"
+            surface="object"
+            value={selected.texture || "none"}
+            color={selected.color || "#888888"}
+            onChange={applyTexture}
+            onColorChange={(e) =>
+              updateObject(selected.id, { color: e.target.value })
+            }
           />
-        </label>
+          {isMetalTexture(selected.texture) && (
+            <p className="env-help">
+              Metallic finish — environment lighting is on for reflections
+            </p>
+          )}
+          <button
+            type="button"
+            className="collapse-link-btn"
+            onClick={() => openMaterialModal("object", selected.id)}
+          >
+            Open pattern / tiles / grout
+          </button>
+        </div>
 
         {["position", "rotation", "scale"].map((key) => (
           <div key={key} className="axis-group">

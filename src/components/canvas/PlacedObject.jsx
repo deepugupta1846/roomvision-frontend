@@ -62,7 +62,12 @@ export default function PlacedObject({ object }) {
           selectObject(object.id);
         }}
       >
-        <ObjectMesh catalogId={object.catalogId} color={object.color} />
+        <ObjectMesh
+          catalogId={object.catalogId}
+          color={object.color}
+          texture={object.texture || "none"}
+          material={object.material || null}
+        />
       </group>
 
       {selected && target && (
