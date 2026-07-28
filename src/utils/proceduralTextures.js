@@ -155,6 +155,62 @@ function drawWallpaper(ctx, size, def) {
   fillNoise(ctx, size, 0.04);
 }
 
+/** Brushed / polished metal plate for realistic object finishes */
+function drawMetal(ctx, size, def) {
+  const base = def.base || "#c0c4c8";
+  const hi = def.highlight || shadeColor(base, 1.25);
+  const lo = def.shadow || shadeColor(base, 0.65);
+  const polish = def.finish === "polish";
+
+  const grad = ctx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, hi);
+  grad.addColorStop(0.45, base);
+  grad.addColorStop(1, lo);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+
+  // Fine horizontal brush strokes
+  const step = polish ? 1 : 1;
+  for (let y = 0; y < size; y += step) {
+    const n = hashNoise(y, 3);
+    ctx.strokeStyle =
+      n > 0.55
+        ? `rgba(255,255,255,${polish ? 0.04 : 0.07 + n * 0.08})`
+        : `rgba(0,0,0,${polish ? 0.03 : 0.06 + (1 - n) * 0.1})`;
+    ctx.lineWidth = polish ? 1 : 1 + hashNoise(y, 7) * 1.2;
+    ctx.beginPath();
+    const wobble = (hashNoise(y, 11) - 0.5) * (polish ? 0.6 : 1.8);
+    ctx.moveTo(0, y + wobble);
+    ctx.lineTo(size, y + wobble * 0.4);
+    ctx.stroke();
+  }
+
+  // Soft diagonal sheen
+  const sheen = ctx.createLinearGradient(0, 0, size, size * 0.35);
+  sheen.addColorStop(0, "rgba(255,255,255,0)");
+  sheen.addColorStop(0.45, polish ? "rgba(255,255,255,0.22)" : "rgba(255,255,255,0.1)");
+  sheen.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.fillStyle = sheen;
+  ctx.fillRect(0, 0, size, size);
+
+  // Sparse micro scratches
+  if (!polish) {
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 18; i++) {
+      const y = hashNoise(i, 17) * size;
+      const len = 20 + hashNoise(i, 19) * 60;
+      const x = hashNoise(i, 23) * size;
+      ctx.strokeStyle = `rgba(255,255,255,${0.04 + hashNoise(i, 29) * 0.08})`;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + len, y + (hashNoise(i, 31) - 0.5) * 2);
+      ctx.stroke();
+    }
+  }
+
+  fillNoise(ctx, size, polish ? 0.03 : 0.05);
+}
+
 function shadeColor(hex, factor) {
   const n = parseInt(hex.slice(1), 16);
   let r = ((n >> 16) & 255) * factor;
@@ -197,6 +253,9 @@ function paintCanvas(def) {
       break;
     case "wallpaper":
       drawWallpaper(ctx, size, def);
+      break;
+    case "metal":
+      drawMetal(ctx, size, def);
       break;
     default:
       ctx.fillStyle = "#cccccc";

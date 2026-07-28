@@ -71,6 +71,19 @@ export function useEditorHotkeys() {
         return;
       }
 
+      if (key === "i" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        store.toggleInsideRoom();
+        const inside = useEditorStore.getState().isInsideRoom;
+        store.setShareStatus({
+          message: inside
+            ? "Inside room — place & customize objects"
+            : "Exterior view",
+          isError: false,
+        });
+        return;
+      }
+
       if (key === "p") {
         e.preventDefault();
         store.togglePreview();
@@ -81,6 +94,10 @@ export function useEditorHotkeys() {
         e.preventDefault();
         if (store.isPreviewMode) {
           store.exitPreview();
+        } else if (store.selectedId) {
+          store.clearSelection();
+        } else if (store.isInsideRoom) {
+          store.exitRoom();
         } else {
           store.clearSelection();
         }

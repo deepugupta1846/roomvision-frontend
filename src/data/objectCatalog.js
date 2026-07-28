@@ -1,11 +1,12 @@
 /**
- * Object catalog mirrored from decode editor categories:
- * Furniture (asset_type: 9) and Interior (asset_type: 5).
+ * Object catalog: Furniture, Interior, Bathroom, Kitchen.
  * Instances are procedural meshes until GLTF assets are wired.
  */
 export const categories = [
   { id: "furniture", label: "Furniture", assetType: 9 },
   { id: "interior", label: "Interior", assetType: 5 },
+  { id: "bathroom", label: "Bathroom", assetType: 11 },
+  { id: "kitchen", label: "Kitchen", assetType: 12 },
 ];
 
 export const objectCatalog = [
@@ -188,8 +189,140 @@ export const objectCatalog = [
     defaultColor: "#7d6550",
     size: { w: 1.5, h: 0.75, d: 0.4 },
   },
+
+  // —— Bathroom ——
+  {
+    id: "bathtub",
+    label: "Bathtub",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#f0f2f4",
+    size: { w: 1.7, h: 0.55, d: 0.75 },
+  },
+  {
+    id: "toilet",
+    label: "Toilet",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#f5f5f5",
+    size: { w: 0.4, h: 0.75, d: 0.65 },
+  },
+  {
+    id: "bathroom-sink",
+    label: "Sink",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#eceff2",
+    size: { w: 0.6, h: 0.85, d: 0.45 },
+  },
+  {
+    id: "vanity",
+    label: "Vanity",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#7a8a96",
+    size: { w: 1.2, h: 0.85, d: 0.5 },
+  },
+  {
+    id: "shower",
+    label: "Shower",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#c5d0d8",
+    size: { w: 0.9, h: 2.0, d: 0.9 },
+  },
+  {
+    id: "towel-rack",
+    label: "Towel Rack",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#d8dde2",
+    size: { w: 0.7, h: 0.35, d: 0.12 },
+  },
+  {
+    id: "bathroom-cabinet",
+    label: "Cabinet",
+    category: "bathroom",
+    type: "primitive",
+    defaultColor: "#6e7c88",
+    size: { w: 0.55, h: 0.7, d: 0.35 },
+  },
+
+  // —— Kitchen ——
+  {
+    id: "kitchen-counter",
+    label: "Counter",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#cfc8bc",
+    size: { w: 2.0, h: 0.9, d: 0.6 },
+  },
+  {
+    id: "kitchen-island",
+    label: "Island",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#b8aea0",
+    size: { w: 1.6, h: 0.9, d: 0.8 },
+  },
+  {
+    id: "fridge",
+    label: "Fridge",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#e8eaed",
+    size: { w: 0.7, h: 1.8, d: 0.7 },
+  },
+  {
+    id: "stove",
+    label: "Stove",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#3a3a3a",
+    size: { w: 0.7, h: 0.9, d: 0.65 },
+  },
+  {
+    id: "kitchen-sink",
+    label: "Sink",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#d5d9de",
+    size: { w: 0.8, h: 0.9, d: 0.55 },
+  },
+  {
+    id: "dishwasher",
+    label: "Dishwasher",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#c8ccd0",
+    size: { w: 0.6, h: 0.85, d: 0.6 },
+  },
+  {
+    id: "upper-cabinet",
+    label: "Upper Cabinet",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#8a939c",
+    size: { w: 1.0, h: 0.7, d: 0.35 },
+  },
+  {
+    id: "microwave",
+    label: "Microwave",
+    category: "kitchen",
+    type: "primitive",
+    defaultColor: "#2f3236",
+    size: { w: 0.5, h: 0.3, d: 0.35 },
+  },
 ];
 
 export function getCatalogItem(id) {
   return objectCatalog.find((item) => item.id === id);
+}
+
+export function categoryBadge(category) {
+  if (category === "furniture") return "F";
+  if (category === "interior") return "I";
+  if (category === "bathroom") return "B";
+  if (category === "kitchen") return "K";
+  return "?";
 }

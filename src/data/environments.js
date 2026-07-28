@@ -77,9 +77,20 @@ export function getSurfacePbr(textureId, surface = "floor") {
     marble: { roughness: 0.12, metalness: 0.05, envMapIntensity: 1.6 },
     concrete: { roughness: 0.85, metalness: 0.0, envMapIntensity: 0.45 },
     carpet: { roughness: 0.95, metalness: 0.0, envMapIntensity: 0.2 },
+    fabric: { roughness: 0.92, metalness: 0.0, envMapIntensity: 0.25 },
+    leather: { roughness: 0.55, metalness: 0.04, envMapIntensity: 0.55 },
+    "metal-steel": { roughness: 0.28, metalness: 0.95, envMapIntensity: 1.85 },
+    "metal-chrome": { roughness: 0.08, metalness: 1.0, envMapIntensity: 2.4 },
+    "metal-brass": { roughness: 0.32, metalness: 0.92, envMapIntensity: 1.9 },
+    "metal-copper": { roughness: 0.35, metalness: 0.9, envMapIntensity: 1.85 },
+    "metal-black": { roughness: 0.4, metalness: 0.88, envMapIntensity: 1.6 },
     brick: { roughness: 0.92, metalness: 0.0, envMapIntensity: 0.3 },
     plaster: { roughness: 0.78, metalness: 0.0, envMapIntensity: 0.5 },
     wallpaper: { roughness: 0.82, metalness: 0.0, envMapIntensity: 0.4 },
   };
   return table[textureId] || table.none;
+}
+
+export function isMetalTexture(textureId) {
+  return String(textureId || "").startsWith("metal-");
 }

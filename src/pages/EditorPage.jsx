@@ -13,6 +13,7 @@ export default function EditorPage() {
   const setRemoteRoomId = useEditorStore((s) => s.setRemoteRoomId);
   const exitPreview = useEditorStore((s) => s.exitPreview);
   const setShareStatus = useEditorStore((s) => s.setShareStatus);
+  const editorPhase = useEditorStore((s) => s.editorPhase);
 
   const [projectLoading, setProjectLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,7 +35,6 @@ export default function EditorPage() {
         };
         if (!doc.name) doc.name = room.name;
 
-        // Always open dashboard rooms in edit mode
         loadProject(doc);
         exitPreview();
         setRemoteRoomId(room.id);
@@ -79,22 +79,26 @@ export default function EditorPage() {
     );
   }
 
+  const hideChrome = editorPhase === "draw";
+
   return (
     <div className="editor-page-shell">
-      <div className="editor-top-bar">
-        <div className="editor-top-bar-left">
-          <Link to="/dashboard" className="back-dashboard">
-            ← Dashboard
-          </Link>
-          <span className="editor-top-bar-sep" aria-hidden>
-            /
+      {!hideChrome && (
+        <div className="editor-top-bar">
+          <div className="editor-top-bar-left">
+            <Link to="/dashboard" className="back-dashboard">
+              ← Dashboard
+            </Link>
+            <span className="editor-top-bar-sep" aria-hidden>
+              /
+            </span>
+            <RoomNameField />
+          </div>
+          <span className="editor-mode-label">
+            {projectLoading ? "Loading…" : "Edit mode"}
           </span>
-          <RoomNameField />
         </div>
-        <span className="editor-mode-label">
-          {projectLoading ? "Loading…" : "Edit mode"}
-        </span>
-      </div>
+      )}
       <EditorLayout
         projectLoading={projectLoading}
         loadLabel="Loading room…"

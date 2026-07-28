@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useState } from "react";
+import { FiChevronDown } from "react-icons/fi";
 import { useEditorStore } from "../../store/useEditorStore";
-import { texturesForSurface } from "../../data/roomTextures";
-import { getTexturePreviewDataUrl } from "../../utils/proceduralTextures";
 import { environments } from "../../data/environments";
+import TexturePicker from "./TexturePicker";
 
 const fields = [
   { key: "width", label: "Width (m)", min: 2, max: 20, step: 0.1 },
@@ -24,45 +24,22 @@ const fields = [
   },
 ];
 
-function TexturePicker({ label, surface, value, onChange, color, onColorChange }) {
-  const options = useMemo(() => texturesForSurface(surface), [surface]);
-  const previews = useMemo(() => {
-    const map = {};
-    for (const opt of options) {
-      map[opt.id] = getTexturePreviewDataUrl(opt.id);
-    }
-    return map;
-  }, [options]);
-
+function CollapseSection({ id, title, summary, open, onToggle, children }) {
   return (
-    <div className="texture-picker">
-      <div className="texture-picker-header">
-        <span>{label} texture</span>
-        <label className="field-inline texture-color">
-          <span>Color</span>
-          <input type="color" value={color} onChange={onColorChange} />
-        </label>
-      </div>
-      <div className="texture-grid">
-        {options.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            className={
-              value === opt.id ? "texture-swatch active" : "texture-swatch"
-            }
-            title={opt.label}
-            onClick={() => onChange(opt.id)}
-          >
-            {previews[opt.id] ? (
-              <img src={previews[opt.id]} alt="" />
-            ) : (
-              <span className="texture-solid" style={{ background: color }} />
-            )}
-            <span className="texture-name">{opt.label}</span>
-          </button>
-        ))}
-      </div>
+    <div className={open ? "collapse-section open" : "collapse-section"}>
+      <button
+        type="button"
+        className="collapse-header"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+      >
+        <span className="collapse-title">
+          <strong>{title}</strong>
+          {summary ? <small>{summary}</small> : null}
+        </span>
+        <FiChevronDown className="collapse-chevron" aria-hidden />
+      </button>
+      {open && <div className="collapse-body">{children}</div>}
     </div>
   );
 }
@@ -71,26 +48,20 @@ function EnvironmentSection({ room, setRoom }) {
   const enabled = room.environmentEnabled === true;
 
   return (
-    <div className="env-section">
+    <div className="env-section nested">
       <div className="texture-picker-header">
-        <span>Environment</span>
+        <span>Lighting</span>
         <label className="env-switch" title="Enable or disable environment">
           <input
             type="checkbox"
             checked={enabled}
-            onChange={(e) =>
-              setRoom({ environmentEnabled: e.target.checked })
-            }
+            onChange={(e) => setRoom({ environmentEnabled: e.target.checked })}
           />
           <span className="env-switch-track" aria-hidden />
-          <span className="env-switch-label">
-            {enabled ? "On" : "Off"}
-          </span>
+          <span className="env-switch-label">{enabled ? "On" : "Off"}</span>
         </label>
       </div>
-      <p className="env-help">
-        Lighting &amp; reflections for floor/wall textures
-      </p>
+      <p className="env-help">Reflections for floor and wall surfaces</p>
 
       <div className={enabled ? "env-controls" : "env-controls disabled"}>
         <div className="env-grid">
@@ -150,56 +121,124 @@ function EnvironmentSection({ room, setRoom }) {
   );
 }
 
+function textureSummary(textureId, color) {
+  if (textureId === "material") return "Pattern / grout";
+  if (!textureId || textureId === "none") return `Solid ${color}`;
+  return textureId.replace(/-/g, " ");
+}
+
 export default function RoomPanel() {
   const room = useEditorStore((s) => s.room);
   const setRoom = useEditorStore((s) => s.setRoom);
+  const openMaterialModal = useEditorStore((s) => s.openMaterialModal);
+
+  const [openSections, setOpenSections] = useState({
+    size: true,
+    environment: false,
+    floor: false,
+    wall: false,
+  });
+
+  const toggle = (id) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
 
   return (
-    <section className="panel">
+    <section className="panel room-panel">
       <header className="panel-header">
         <h2>Room</h2>
-        <p>Size, environment, textures</p>
+        <p>Size &amp; surfaces</p>
       </header>
 
       <div className="field-list">
-        {fields.map((field) => (
-          <label key={field.key} className="field">
-            <span>
-              {field.label}
-              <strong>{Number(room[field.key]).toFixed(2)}</strong>
-            </span>
-            <input
-              type="range"
-              min={field.min}
-              max={field.max}
-              step={field.step}
-              value={room[field.key]}
-              onChange={(e) =>
-                setRoom({ [field.key]: Number(e.target.value) })
-              }
-            />
-          </label>
-        ))}
+        <CollapseSection
+          id="size"
+          title="Size"
+          summary={`${Number(room.width).toFixed(1)} × ${Number(room.depth).toFixed(1)} × ${Number(room.height).toFixed(1)} m`}
+          open={openSections.size}
+          onToggle={toggle}
+        >
+          {fields.map((field) => (
+            <label key={field.key} className="field">
+              <span>
+                {field.label}
+                <strong>{Number(room[field.key]).toFixed(2)}</strong>
+              </span>
+              <input
+                type="range"
+                min={field.min}
+                max={field.max}
+                step={field.step}
+                value={room[field.key]}
+                onChange={(e) =>
+                  setRoom({ [field.key]: Number(e.target.value) })
+                }
+              />
+            </label>
+          ))}
+        </CollapseSection>
 
-        <EnvironmentSection room={room} setRoom={setRoom} />
+        <CollapseSection
+          id="environment"
+          title="Environment"
+          summary={
+            room.environmentEnabled
+              ? room.environment || "apartment"
+              : "Off"
+          }
+          open={openSections.environment}
+          onToggle={toggle}
+        >
+          <EnvironmentSection room={room} setRoom={setRoom} />
+        </CollapseSection>
 
-        <TexturePicker
-          label="Floor"
-          surface="floor"
-          value={room.floorTexture || "none"}
-          color={room.floorColor}
-          onChange={(floorTexture) => setRoom({ floorTexture })}
-          onColorChange={(e) => setRoom({ floorColor: e.target.value })}
-        />
+        <CollapseSection
+          id="floor"
+          title="Floor texture"
+          summary={textureSummary(room.floorTexture, room.floorColor)}
+          open={openSections.floor}
+          onToggle={toggle}
+        >
+          <TexturePicker
+            label="Floor"
+            surface="floor"
+            value={room.floorTexture || "none"}
+            color={room.floorColor}
+            onChange={(floorTexture) => setRoom({ floorTexture })}
+            onColorChange={(e) => setRoom({ floorColor: e.target.value })}
+          />
+          <button
+            type="button"
+            className="collapse-link-btn"
+            onClick={() => openMaterialModal("floor")}
+          >
+            Open pattern / tiles / grout
+          </button>
+        </CollapseSection>
 
-        <TexturePicker
-          label="Wall"
-          surface="wall"
-          value={room.wallTexture || "none"}
-          color={room.wallColor}
-          onChange={(wallTexture) => setRoom({ wallTexture })}
-          onColorChange={(e) => setRoom({ wallColor: e.target.value })}
-        />
+        <CollapseSection
+          id="wall"
+          title="Wall texture"
+          summary={textureSummary(room.wallTexture, room.wallColor)}
+          open={openSections.wall}
+          onToggle={toggle}
+        >
+          <TexturePicker
+            label="Wall"
+            surface="wall"
+            value={room.wallTexture || "none"}
+            color={room.wallColor}
+            onChange={(wallTexture) => setRoom({ wallTexture })}
+            onColorChange={(e) => setRoom({ wallColor: e.target.value })}
+          />
+          <button
+            type="button"
+            className="collapse-link-btn"
+            onClick={() => openMaterialModal("wall")}
+          >
+            Open pattern / tiles / grout
+          </button>
+        </CollapseSection>
       </div>
     </section>
   );
